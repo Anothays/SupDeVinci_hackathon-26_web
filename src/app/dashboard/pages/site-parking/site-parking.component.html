@@ -1,0 +1,121 @@
+<div class="p-6">
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-lg font-semibold text-foreground">Parkings</h1>
+      <p class="text-sm text-muted-foreground">Capacité de stationnement par type et par site</p>
+    </div>
+    <button
+      class="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50"
+      [disabled]="!selectedSiteId()"
+      (click)="openCreate()"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Ajouter
+    </button>
+  </div>
+
+  <!-- Site selector -->
+  <div class="mb-4 flex items-center gap-3">
+    <label class="text-sm font-medium text-foreground">Site :</label>
+    <select
+      class="h-9 min-w-[240px] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      (change)="onSiteChange($event)"
+    >
+      <option value="">— Sélectionner un site —</option>
+      @for (site of sites(); track site.id) {
+        <option [value]="site.id">{{ site.name }}</option>
+      }
+    </select>
+  </div>
+
+  @if (!selectedSiteId()) {
+    <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-16 text-center">
+      <p class="text-sm text-muted-foreground">Sélectionnez un site pour voir ses parkings</p>
+    </div>
+  } @else if (loading()) {
+    <div class="flex items-center justify-center py-16">
+      <svg class="animate-spin text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+    </div>
+  } @else if (items().length === 0) {
+    <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-16 text-center">
+      <p class="text-sm font-medium text-foreground">Aucun parking enregistré</p>
+      <p class="mt-1 text-xs text-muted-foreground">Ajoutez les places de stationnement de ce site.</p>
+    </div>
+  } @else {
+    <div class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <table class="w-full text-sm">
+        <thead class="border-b border-border bg-muted/50">
+          <tr class="text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <th class="px-4 py-3">Type</th>
+            <th class="px-4 py-3">Nombre de places</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          @for (item of items(); track item.id) {
+            <tr class="transition-colors hover:bg-muted/30">
+              <td class="px-4 py-3 font-medium text-foreground">{{ typeLabel(item.type) }}</td>
+              <td class="px-4 py-3 tabular-nums font-semibold text-foreground">{{ item.count }}</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-end gap-2">
+                  <button class="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm transition-colors hover:bg-accent" (click)="openEdit(item)">Modifier</button>
+                  <button class="inline-flex h-8 items-center rounded-md bg-destructive px-3 text-xs font-medium text-white shadow-sm transition-colors hover:bg-destructive/90" (click)="askDelete(item.id)">Supprimer</button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Modal -->
+  @if (showModal()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" (click)="closeModal()">
+      <div class="w-full max-w-sm rounded-xl bg-background p-6 shadow-xl" (click)="$event.stopPropagation()">
+        <h2 class="mb-4 text-base font-semibold text-foreground">
+          {{ editingId() ? 'Modifier le parking' : 'Ajouter un parking' }}
+        </h2>
+        <form [formGroup]="form" (ngSubmit)="save()" class="flex flex-col gap-4">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-muted-foreground">Type *</label>
+            <select formControlName="type"
+              class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              @for (t of parkingTypes; track t) {
+                <option [value]="t">{{ typeLabel(t) }}</option>
+              }
+            </select>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-muted-foreground">Nombre de places *</label>
+            <input hlmInput type="number" formControlName="count" placeholder="100"/>
+          </div>
+
+          @if (error()) {
+            <p class="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{{ error() }}</p>
+          }
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" class="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-accent" (click)="closeModal()">Annuler</button>
+            <button type="submit" class="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50" [disabled]="saving() || form.invalid">
+              {{ saving() ? 'Enregistrement...' : 'Enregistrer' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Delete confirmation -->
+  @if (deletingId()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div class="w-full max-w-sm rounded-xl bg-background p-6 shadow-xl">
+        <h2 class="text-base font-semibold text-foreground">Supprimer ce parking ?</h2>
+        <p class="mt-2 text-sm text-muted-foreground">Cette action est irréversible.</p>
+        <div class="mt-4 flex justify-end gap-2">
+          <button class="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-accent" (click)="cancelDelete()">Annuler</button>
+          <button class="inline-flex h-9 items-center rounded-md bg-destructive px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-destructive/90" (click)="confirmDelete()">Supprimer</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

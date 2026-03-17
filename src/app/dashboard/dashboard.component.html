@@ -1,0 +1,439 @@
+<!-- ===== NAVBAR ===== -->
+<header class="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
+  <div class="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
+    <div class="flex items-center gap-2">
+      <div
+        class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 2a10 10 0 1 0 10 10" />
+          <path d="M12 6v6l4 2" />
+          <path d="M22 2 12 12" />
+        </svg>
+      </div>
+      <span class="text-sm font-semibold tracking-tight text-foreground">CarbonTrack</span>
+      <span class="hidden text-xs text-muted-foreground sm:block">— Capgemini</span>
+    </div>
+
+    <div class="flex items-center gap-3">
+      @if (user()) {
+        <span class="hidden text-sm text-muted-foreground sm:block">
+          {{ user()?.firstName ?? user()?.email }}
+        </span>
+      }
+      <button hlmBtn variant="outline" size="sm" (click)="logout()">Déconnexion</button>
+    </div>
+  </div>
+</header>
+
+<!-- ===== MAIN ===== -->
+<main class="mx-auto max-w-screen-xl px-4 py-6">
+  <!-- Site selector -->
+  <div class="mb-6 flex flex-wrap items-end gap-4">
+    <div class="flex flex-col gap-1.5">
+      <label class="text-sm font-medium text-foreground" for="site-select">Site physique</label>
+      <select
+        id="site-select"
+        class="h-9 min-w-[260px] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+        (change)="onSiteChange($event)"
+      >
+        <option value="">— Sélectionner un site —</option>
+        @for (site of sites(); track site.id) {
+          <option [value]="site.id">{{ site.name }} ({{ site.city ?? site.address }})</option>
+        }
+      </select>
+    </div>
+
+    @if (selectedSite()) {
+      <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        @if (selectedSite()?.totalSurfaceM2) {
+          <span hlmBadge variant="secondary">
+            {{ selectedSite()!.totalSurfaceM2 | number: '1.0-0' }} m²
+          </span>
+        }
+        @if (selectedSite()?.employeeCount) {
+          <span hlmBadge variant="secondary">
+            {{ selectedSite()!.employeeCount | number: '1.0-0' }} employés
+          </span>
+        }
+        @if (selectedSite()?.constructionYear) {
+          <span hlmBadge variant="outline">
+            Construit en {{ selectedSite()!.constructionYear }}
+          </span>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Empty state -->
+  @if (!selectedSiteId()) {
+    <div
+      class="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-20 text-center"
+    >
+      <div
+        class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
+          <rect width="16" height="20" x="4" y="2" rx="2" />
+          <path d="M9 7h6M9 11h6M9 15h4" />
+        </svg>
+      </div>
+      <p class="text-sm font-medium text-foreground">Aucun site sélectionné</p>
+      <p class="mt-1 text-xs text-muted-foreground">
+        Choisissez un site pour visualiser son empreinte carbone
+      </p>
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (loadingReports()) {
+    <div class="flex items-center justify-center py-20">
+      <svg
+        class="animate-spin text-muted-foreground"
+        xmlns="http://www.w3.org/2000/svg"
+        width="32"
+        height="32"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      </svg>
+    </div>
+  }
+
+  <!-- Dashboard content -->
+  @if (selectedSiteId() && !loadingReports()) {
+    @if (reports().length === 0) {
+      <div
+        class="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-16 text-center"
+      >
+        <p class="text-sm font-medium text-foreground">Aucun rapport disponible</p>
+        <p class="mt-1 text-xs text-muted-foreground">Ce site n'a pas encore de bilan carbone calculé.</p>
+      </div>
+    } @else {
+      <!-- KPI Cards -->
+      <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            CO₂ Total
+          </p>
+          <p class="mt-2 text-3xl font-bold tabular-nums text-foreground">
+            @if (latestReport()?.totalCo2Kg != null) {
+              {{ latestReport()!.totalCo2Kg! / 1000 | number: '1.1-1' }}
+              <span class="text-base font-normal text-muted-foreground">t CO₂</span>
+            } @else {
+              <span class="text-muted-foreground">—</span>
+            }
+          </p>
+          @if (latestReport()?.referenceYear) {
+            <p class="mt-1 text-xs text-muted-foreground">
+              Année {{ latestReport()!.referenceYear }}
+            </p>
+          }
+        </div>
+
+        <div class="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            CO₂ / m²
+          </p>
+          <p class="mt-2 text-3xl font-bold tabular-nums text-foreground">
+            @if (latestReport()?.co2PerM2 != null) {
+              {{ latestReport()!.co2PerM2! | number: '1.1-1' }}
+              <span class="text-base font-normal text-muted-foreground">kg</span>
+            } @else {
+              <span class="text-muted-foreground">—</span>
+            }
+          </p>
+          <p class="mt-1 text-xs text-muted-foreground">Intensité surfacique</p>
+        </div>
+
+        <div class="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            CO₂ / Employé
+          </p>
+          <p class="mt-2 text-3xl font-bold tabular-nums text-foreground">
+            @if (latestReport()?.co2PerEmployee != null) {
+              {{ latestReport()!.co2PerEmployee! / 1000 | number: '1.2-2' }}
+              <span class="text-base font-normal text-muted-foreground">t</span>
+            } @else {
+              <span class="text-muted-foreground">—</span>
+            }
+          </p>
+          <p class="mt-1 text-xs text-muted-foreground">Par collaborateur</p>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div
+        [brnTabs]="activeTab()"
+        (brnTabsChange)="activeTab.set($event ?? 'overview')"
+        class="rounded-xl border border-border bg-card shadow-sm"
+      >
+        <!-- Tab list -->
+        <div class="border-b border-border px-4 pt-4">
+          <div brnTabsList class="inline-flex h-9 items-center gap-1 rounded-lg bg-muted p-1">
+            <button
+              [brnTabsTrigger]="'overview'"
+              #overviewTrigger="brnTabsTrigger"
+              [class]="tabClass(overviewTrigger.selected())"
+            >
+              Répartition
+            </button>
+            <button
+              [brnTabsTrigger]="'history'"
+              #historyTrigger="brnTabsTrigger"
+              [class]="tabClass(historyTrigger.selected())"
+            >
+              Historique
+            </button>
+            <button
+              [brnTabsTrigger]="'categories'"
+              #categoriesTrigger="brnTabsTrigger"
+              [class]="tabClass(categoriesTrigger.selected())"
+            >
+              Catégories
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab: Répartition -->
+        <div [brnTabsContent]="'overview'" class="p-6">
+          @if (latestReport()) {
+            <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
+              <!-- Donut chart -->
+              <div class="flex flex-col items-center gap-4">
+                <h3 class="self-start text-sm font-semibold text-foreground">
+                  Construction vs Exploitation
+                </h3>
+                <div class="relative flex items-center justify-center">
+                  <svg viewBox="0 0 200 200" width="200" height="200" aria-hidden="true">
+                    <circle cx="100" cy="100" r="70" fill="none" stroke="var(--muted)" stroke-width="28" />
+                    @if (donutConstruction().len > 0) {
+                      <circle
+                        cx="100" cy="100" r="70" fill="none" stroke="var(--primary)" stroke-width="28" stroke-linecap="butt"
+                        [attr.stroke-dasharray]="donutConstruction().len + ' ' + donutCircumference"
+                        stroke-dashoffset="0" transform="rotate(-90 100 100)"
+                      />
+                    }
+                    @if (donutExploitation().len > 0) {
+                      <circle
+                        cx="100" cy="100" r="70" fill="none" stroke="oklch(0.7 0.17 145)" stroke-width="28" stroke-linecap="butt"
+                        [attr.stroke-dasharray]="donutExploitation().len + ' ' + donutCircumference"
+                        [attr.stroke-dashoffset]="-donutConstruction().len" transform="rotate(-90 100 100)"
+                      />
+                    }
+                  </svg>
+                  <div class="absolute flex flex-col items-center">
+                    <span class="text-xl font-bold tabular-nums text-foreground">
+                      {{ totalCo2T() | number: '1.0-0' }}
+                    </span>
+                    <span class="text-xs text-muted-foreground">t CO₂</span>
+                  </div>
+                </div>
+
+                <div class="flex flex-col gap-2 self-start">
+                  <div class="flex items-center gap-2 text-sm">
+                    <span class="h-3 w-3 rounded-sm bg-primary"></span>
+                    <span class="text-foreground">Construction</span>
+                    <span class="ml-auto font-semibold tabular-nums text-foreground">
+                      {{ donutConstruction().pct | number: '1.1-1' }}%
+                    </span>
+                    <span class="text-muted-foreground">
+                      ({{ latestReport()!.constructionCo2Kg! / 1000 | number: '1.1-1' }} t)
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-2 text-sm">
+                    <span class="h-3 w-3 rounded-sm" style="background: oklch(0.7 0.17 145)"></span>
+                    <span class="text-foreground">Exploitation</span>
+                    <span class="ml-auto font-semibold tabular-nums text-foreground">
+                      {{ donutExploitation().pct | number: '1.1-1' }}%
+                    </span>
+                    <span class="text-muted-foreground">
+                      ({{ latestReport()!.exploitationCo2Kg! / 1000 | number: '1.1-1' }} t)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Summary details -->
+              <div class="flex flex-col gap-3">
+                <h3 class="text-sm font-semibold text-foreground">Résumé du dernier rapport</h3>
+                <div class="divide-y divide-border rounded-lg border border-border">
+                  <div class="flex justify-between px-4 py-3 text-sm">
+                    <span class="text-muted-foreground">Année de référence</span>
+                    <span class="font-medium text-foreground">{{ latestReport()?.referenceYear ?? '—' }}</span>
+                  </div>
+                  <div class="flex justify-between px-4 py-3 text-sm">
+                    <span class="text-muted-foreground">CO₂ Construction</span>
+                    <span class="font-medium text-foreground">
+                      @if (latestReport()?.constructionCo2Kg != null) {
+                        {{ latestReport()!.constructionCo2Kg! / 1000 | number: '1.2-2' }} t
+                      } @else { — }
+                    </span>
+                  </div>
+                  <div class="flex justify-between px-4 py-3 text-sm">
+                    <span class="text-muted-foreground">CO₂ Exploitation</span>
+                    <span class="font-medium text-foreground">
+                      @if (latestReport()?.exploitationCo2Kg != null) {
+                        {{ latestReport()!.exploitationCo2Kg! / 1000 | number: '1.2-2' }} t
+                      } @else { — }
+                    </span>
+                  </div>
+                  <div class="flex justify-between px-4 py-3 text-sm">
+                    <span class="text-muted-foreground">Calculé le</span>
+                    <span class="font-medium text-foreground">
+                      {{ latestReport()?.calculatedAt | date: 'dd/MM/yyyy HH:mm' }}
+                    </span>
+                  </div>
+                  @if (latestReport()?.notes) {
+                    <div class="px-4 py-3 text-sm">
+                      <span class="block text-muted-foreground">Notes</span>
+                      <span class="mt-1 block text-foreground">{{ latestReport()!.notes }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+
+        <!-- Tab: Historique -->
+        <div [brnTabsContent]="'history'" class="p-6">
+          <h3 class="mb-4 text-sm font-semibold text-foreground">
+            Historique des bilans ({{ reports().length }})
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  <th class="pb-3 pr-4">Année</th>
+                  <th class="pb-3 pr-4">Total CO₂</th>
+                  <th class="pb-3 pr-4">Construction</th>
+                  <th class="pb-3 pr-4">Exploitation</th>
+                  <th class="pb-3 pr-4">CO₂/m²</th>
+                  <th class="pb-3 pr-4">CO₂/emp.</th>
+                  <th class="pb-3">Date calcul</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                @for (report of reports(); track report.id) {
+                  <tr
+                    class="cursor-pointer transition-colors hover:bg-muted/50"
+                    [class.bg-muted]="report.id === latestReport()?.id"
+                    (click)="selectReport(report)"
+                  >
+                    <td class="py-3 pr-4 font-medium text-foreground">
+                      {{ report.referenceYear ?? '—' }}
+                      @if (report.id === latestReport()?.id) {
+                        <span hlmBadge variant="default" class="ml-2 text-[10px]">Dernier</span>
+                      }
+                    </td>
+                    <td class="py-3 pr-4 tabular-nums text-foreground">
+                      @if (report.totalCo2Kg != null) { {{ report.totalCo2Kg / 1000 | number: '1.1-1' }} t } @else { — }
+                    </td>
+                    <td class="py-3 pr-4 tabular-nums text-muted-foreground">
+                      @if (report.constructionCo2Kg != null) { {{ report.constructionCo2Kg / 1000 | number: '1.1-1' }} t } @else { — }
+                    </td>
+                    <td class="py-3 pr-4 tabular-nums text-muted-foreground">
+                      @if (report.exploitationCo2Kg != null) { {{ report.exploitationCo2Kg / 1000 | number: '1.1-1' }} t } @else { — }
+                    </td>
+                    <td class="py-3 pr-4 tabular-nums text-muted-foreground">
+                      @if (report.co2PerM2 != null) { {{ report.co2PerM2 | number: '1.1-1' }} kg } @else { — }
+                    </td>
+                    <td class="py-3 pr-4 tabular-nums text-muted-foreground">
+                      @if (report.co2PerEmployee != null) { {{ report.co2PerEmployee / 1000 | number: '1.2-2' }} t } @else { — }
+                    </td>
+                    <td class="py-3 text-muted-foreground">{{ report.calculatedAt | date: 'dd/MM/yy' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab: Catégories -->
+        <div [brnTabsContent]="'categories'" class="p-6">
+          <h3 class="mb-4 text-sm font-semibold text-foreground">
+            Détail par catégorie
+            @if (latestReport()?.referenceYear) {
+              <span class="font-normal text-muted-foreground">— {{ latestReport()!.referenceYear }}</span>
+            }
+          </h3>
+
+          @if (loadingDetails()) {
+            <div class="flex items-center justify-center py-10">
+              <svg class="animate-spin text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+            </div>
+          } @else if (reportDetails().length === 0) {
+            <p class="text-sm text-muted-foreground">Aucun détail disponible pour ce rapport.</p>
+          } @else {
+            <div class="flex flex-col gap-4">
+              @for (detail of sortedDetails(); track detail.id) {
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex items-center justify-between text-sm">
+                    <div class="flex items-center gap-2">
+                      <span class="h-2.5 w-2.5 rounded-full" [style.background]="getCategoryColor(detail.category)"></span>
+                      <span class="font-medium text-foreground">{{ getCategoryLabel(detail.category) }}</span>
+                    </div>
+                    <div class="flex items-center gap-3 tabular-nums text-muted-foreground">
+                      @if (detail.co2Kg != null) { <span>{{ detail.co2Kg / 1000 | number: '1.2-2' }} t CO₂</span> }
+                      @if (detail.percentage != null) {
+                        <span class="w-12 text-right font-semibold text-foreground">{{ detail.percentage | number: '1.1-1' }}%</span>
+                      }
+                    </div>
+                  </div>
+                  <brn-progress [value]="detail.percentage ?? 0" [max]="100" class="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <brn-progress-indicator
+                      class="h-full transition-all duration-500"
+                      [style.background]="getCategoryColor(detail.category)"
+                      [style.width.%]="detail.percentage ?? 0"
+                    />
+                  </brn-progress>
+                </div>
+              }
+            </div>
+
+            <brn-separator class="my-5 block h-px w-full shrink-0 bg-border" [decorative]="true" />
+
+            <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <div class="rounded-lg bg-muted/50 px-4 py-3 text-sm">
+                <p class="text-xs text-muted-foreground">Matériaux</p>
+                <p class="mt-1 font-semibold tabular-nums text-foreground">{{ materialsTotal() / 1000 | number: '1.1-1' }} t</p>
+              </div>
+              <div class="rounded-lg bg-muted/50 px-4 py-3 text-sm">
+                <p class="text-xs text-muted-foreground">Énergie</p>
+                <p class="mt-1 font-semibold tabular-nums text-foreground">{{ energyTotal() / 1000 | number: '1.1-1' }} t</p>
+              </div>
+              <div class="rounded-lg bg-muted/50 px-4 py-3 text-sm">
+                <p class="text-xs text-muted-foreground">Parking</p>
+                <p class="mt-1 font-semibold tabular-nums text-foreground">{{ parkingTotal() / 1000 | number: '1.2-2' }} t</p>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+</main>

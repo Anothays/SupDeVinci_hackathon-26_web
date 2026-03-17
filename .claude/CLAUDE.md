@@ -1,55 +1,70 @@
+# CLAUDE.md
 
-You are an expert in TypeScript, Angular, and scalable web application development. You write functional, maintainable, performant, and accessible code following Angular and TypeScript best practices.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## TypeScript Best Practices
+## Rôle
 
-- Use strict type checking
-- Prefer type inference when the type is obvious
-- Avoid the `any` type; use `unknown` when type is uncertain
+Frontend Angular 21 de l'application de calcul d'empreinte carbone (Hackathon Capgemini / Sup De Vinci 2026). Consomme l'API Spring Boot sur `http://localhost:8080/api`.
 
-## Angular Best Practices
+## Commandes
 
-- Always use standalone components over NgModules
-- Must NOT set `standalone: true` inside Angular decorators. It's the default in Angular v20+.
-- Use signals for state management
-- Implement lazy loading for feature routes
-- Do NOT use the `@HostBinding` and `@HostListener` decorators. Put host bindings inside the `host` object of the `@Component` or `@Directive` decorator instead
-- Use `NgOptimizedImage` for all static images.
-  - `NgOptimizedImage` does not work for inline base64 images.
+```bash
+npm start       # Dev server → http://localhost:4200
+npm run build   # Build production
+npm run watch   # Build en mode watch
+npm test        # Tests Vitest
+```
 
-## Accessibility Requirements
+## Fonctionnalités à couvrir
 
-- It MUST pass all AXE checks.
-- It MUST follow all WCAG AA minimums, including focus management, color contrast, and ARIA attributes.
+### Palier 1 (obligatoire)
+- Formulaire de saisie d'un site (superficie, parking, énergie, matériaux, employés)
+- Affichage du résultat CO₂ calculé
 
-### Components
+### Palier 2
+- Dashboard interactif :
+  - KPIs : CO₂ total, CO₂/m², CO₂/employé
+  - Graphiques dynamiques (répartition construction vs exploitation)
+  - Historique des rapports
 
-- Keep components small and focused on a single responsibility
-- Use `input()` and `output()` functions instead of decorators
-- Use `computed()` for derived state
-- Set `changeDetection: ChangeDetectionStrategy.OnPush` in `@Component` decorator
-- Prefer inline templates for small components
-- Prefer Reactive forms instead of Template-driven ones
-- Do NOT use `ngClass`, use `class` bindings instead
-- Do NOT use `ngStyle`, use `style` bindings instead
-- When using external templates/styles, use paths relative to the component TS file.
+### Palier 3 (bonus)
+- Comparaison de plusieurs sites
+- Courbes d'évolution historique
+- Export PDF
 
-## State Management
+## Architecture Angular
 
-- Use signals for local component state
-- Use `computed()` for derived state
-- Keep state transformations pure and predictable
-- Do NOT use `mutate` on signals, use `update` or `set` instead
+- Routing dans `app.routes.ts` — lazy loading obligatoire pour chaque feature
+- Services HTTP dans `services/` — injectés avec `inject()`, `providedIn: 'root'`
+- Formulaires réactifs pour toutes les saisies de données
+- Signaux pour l'état local, `computed()` pour l'état dérivé
 
-## Templates
+## Conventions de code
 
-- Keep templates simple and avoid complex logic
-- Use native control flow (`@if`, `@for`, `@switch`) instead of `*ngIf`, `*ngFor`, `*ngSwitch`
-- Use the async pipe to handle observables
-- Do not assume globals like (`new Date()`) are available.
+### TypeScript
+- Strict mode activé — pas de `any`, utiliser `unknown` si le type est incertain
+- Préférer l'inférence de type quand elle est évidente
+
+### Composants Angular
+- Standalone uniquement — ne **pas** écrire `standalone: true` (défaut depuis Angular v20)
+- `changeDetection: ChangeDetectionStrategy.OnPush` sur tous les composants
+- `input()` et `output()` au lieu des décorateurs `@Input` / `@Output`
+- `inject()` au lieu de l'injection par constructeur
+- `@if`, `@for`, `@switch` (native control flow) — jamais `*ngIf`, `*ngFor`, `*ngSwitch`
+- `class` bindings au lieu de `ngClass` ; `style` bindings au lieu de `ngStyle`
+- Pas de `@HostBinding` / `@HostListener` — utiliser l'objet `host` dans `@Component` / `@Directive`
+- `NgOptimizedImage` pour toutes les images statiques (pas les base64 inline)
+- Templates inline pour les petits composants
+
+### Accessibilité
+- Conformité **WCAG AA** obligatoire (contraste, focus, ARIA)
+- Tous les composants doivent passer les vérifications **AXE**
+
+### Style
+- Prettier : 100 caractères par ligne, guillemets simples (`.prettierrc`)
+- Tailwind CSS 4 pour le style
 
 ## Services
 
-- Design services around a single responsibility
-- Use the `providedIn: 'root'` option for singleton services
-- Use the `inject()` function instead of constructor injection
+- `providedIn: 'root'` pour les services singleton
+- Un service = une responsabilité
