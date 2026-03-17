@@ -1,0 +1,77 @@
+<div class="p-6">
+  <div class="mb-6">
+    <h1 class="text-lg font-semibold text-foreground">Types de parking</h1>
+    <p class="text-sm text-muted-foreground">Gestion des facteurs d'émission par type de parking</p>
+  </div>
+
+  @if (loading()) {
+    <div class="flex items-center justify-center py-16">
+      <svg class="animate-spin text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+    </div>
+  } @else if (parkingTypes().length === 0) {
+    <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-16 text-center">
+      <p class="text-sm font-medium text-foreground">Aucun type de parking configuré</p>
+    </div>
+  } @else {
+    <div class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="border-b border-border bg-muted/50">
+            <tr class="text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <th class="px-4 py-3">Code</th>
+              <th class="px-4 py-3">Nom</th>
+              <th class="px-4 py-3">FE par défaut (kgCO2e/place)</th>
+              <th class="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            @for (pt of parkingTypes(); track pt.id) {
+              <tr class="transition-colors hover:bg-muted/30">
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-mono font-medium text-muted-foreground">
+                    {{ pt.code }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 font-medium text-foreground">{{ pt.name }}</td>
+                <td class="px-4 py-3">
+                  @if (editingId() === pt.id) {
+                    <form [formGroup]="form" (ngSubmit)="save(pt.id)" class="flex items-center gap-2">
+                      <input hlmInput type="number" step="0.001" formControlName="defaultFe" class="h-8 w-36"/>
+                      <button
+                        type="submit"
+                        class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
+                        [disabled]="saving() || form.invalid"
+                      >{{ saving() ? '...' : 'Valider' }}</button>
+                      <button
+                        type="button"
+                        class="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm transition-colors hover:bg-accent"
+                        (click)="cancelEdit()"
+                      >Annuler</button>
+                    </form>
+                    @if (error()) {
+                      <p class="mt-1 text-xs text-destructive">{{ error() }}</p>
+                    }
+                  } @else {
+                    <span class="tabular-nums font-medium text-foreground">{{ pt.defaultFe | number: '1.3-3' }}</span>
+                  }
+                </td>
+                <td class="px-4 py-3 text-right">
+                  @if (editingId() !== pt.id) {
+                    <button
+                      class="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm transition-colors hover:bg-accent"
+                      (click)="startEdit(pt)"
+                    >Modifier</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="mt-4 text-xs text-muted-foreground">
+      Les facteurs d'émission (FE) sont exprimés en kgCO₂e par place de parking. Seuls les administrateurs peuvent modifier ces valeurs.
+    </p>
+  }
+</div>

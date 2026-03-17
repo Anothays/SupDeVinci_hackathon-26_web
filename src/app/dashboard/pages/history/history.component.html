@@ -1,0 +1,498 @@
+<div class="p-6">
+  <div class="mb-6">
+    <h1 class="text-lg font-semibold text-foreground">Historisation</h1>
+    <p class="text-sm text-muted-foreground">Évolution de l'empreinte carbone dans le temps</p>
+  </div>
+
+  <!-- Contrôles -->
+  <div class="mb-6 flex flex-wrap items-end gap-4">
+    <!-- Sélecteur de site -->
+    <div class="flex flex-col gap-1.5">
+      <label class="text-sm font-medium text-foreground" for="site-select">Site</label>
+      <select
+        id="site-select"
+        class="h-9 min-w-[260px] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        (change)="onSiteChange($event)"
+      >
+        <option value="">— Sélectionner un site —</option>
+        @for (site of sites(); track site.id) {
+          <option [value]="site.id">{{ site.name }} ({{ site.city ?? site.address ?? '—' }})</option>
+        }
+      </select>
+    </div>
+
+    <!-- Toggle métrique -->
+    @if (exploitationReports().length > 0) {
+      <div class="flex flex-col gap-1.5">
+        <span class="text-sm font-medium text-foreground">Métrique</span>
+        <div class="inline-flex items-center gap-1 rounded-lg bg-muted p-1">
+          <button
+            type="button"
+            (click)="setMetric('total')"
+            class="rounded-md px-3 py-1 text-sm font-medium transition-colors"
+            [class]="metric() === 'total'
+              ? 'bg-background text-foreground shadow'
+              : 'text-muted-foreground hover:text-foreground'"
+          >Total (t CO₂e)</button>
+          <button
+            type="button"
+            (click)="setMetric('intensity')"
+            class="rounded-md px-3 py-1 text-sm font-medium transition-colors"
+            [class]="metric() === 'intensity'
+              ? 'bg-background text-foreground shadow'
+              : 'text-muted-foreground hover:text-foreground'"
+          >Intensité (kg/m²)</button>
+        </div>
+      </div>
+
+      <!-- Durée de vie (amortissement construction) -->
+      @if (constructionReport()) {
+        <div class="flex flex-col gap-1.5">
+          <label class="text-sm font-medium text-foreground" for="lifetime">
+            Durée de vie du bâtiment
+          </label>
+          <div class="flex items-center gap-2">
+            <input
+              id="lifetime"
+              type="number"
+              min="1"
+              max="200"
+              [value]="lifetimeYears()"
+              (change)="onLifetimeChange($event)"
+              class="h-9 w-24 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <span class="text-sm text-muted-foreground">ans</span>
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <!-- Empty state -->
+  @if (!selectedSiteId()) {
+    <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-20 text-center">
+      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mb-3 text-muted-foreground" aria-hidden="true">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      <p class="text-sm font-medium text-foreground">Aucun site sélectionné</p>
+      <p class="mt-1 text-xs text-muted-foreground">Choisissez un site pour afficher ses courbes d'évolution</p>
+    </div>
+  }
+
+  <!-- Chargement -->
+  @if (loading()) {
+    <div class="flex items-center justify-center py-16">
+      <svg class="animate-spin text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+      </svg>
+    </div>
+  }
+
+  @if (selectedSiteId() && !loading()) {
+
+    <!-- Pas de rapports d'exploitation -->
+    @if (exploitationReports().length === 0) {
+      <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-14 text-center">
+        <p class="text-sm font-medium text-foreground">Aucun rapport d'exploitation</p>
+        <p class="mt-1 text-xs text-muted-foreground">Créez des rapports d'exploitation pour visualiser l'évolution</p>
+      </div>
+    } @else {
+
+      <!-- KPI Cards -->
+      <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <!-- CO2 exploitation cumulé -->
+        <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-widest text-muted-foreground">CO₂ exploitation cumulé</p>
+          <p class="mt-1.5 text-2xl font-bold tabular-nums text-foreground">
+            {{ kpiTotal() / 1000 | number: '1.1-1' }}
+            <span class="text-sm font-normal text-muted-foreground">t</span>
+          </p>
+          <p class="mt-0.5 text-xs text-muted-foreground">{{ exploitationReports().length }} période(s)</p>
+        </div>
+
+        <!-- Moyenne par période -->
+        <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-widest text-muted-foreground">Moyenne / période</p>
+          <p class="mt-1.5 text-2xl font-bold tabular-nums text-foreground">
+            {{ kpiAverage() / 1000 | number: '1.1-1' }}
+            <span class="text-sm font-normal text-muted-foreground">t</span>
+          </p>
+          <p class="mt-0.5 text-xs text-muted-foreground">CO₂e par rapport</p>
+        </div>
+
+        <!-- Tendance -->
+        <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-widest text-muted-foreground">Tendance</p>
+          <div class="mt-1.5 flex items-center gap-2">
+            @if (kpiTrend() === 'up') {
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-red-500" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+              <div>
+                <span class="text-xl font-bold text-red-600">+{{ kpiTrendPct()! | number: '1.1-1' }}%</span>
+                <p class="text-xs text-muted-foreground">En hausse</p>
+              </div>
+            } @else if (kpiTrend() === 'down') {
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-green-500" aria-hidden="true"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+              <div>
+                <span class="text-xl font-bold text-green-600">{{ kpiTrendPct()! | number: '1.1-1' }}%</span>
+                <p class="text-xs text-muted-foreground">En baisse</p>
+              </div>
+            } @else if (kpiTrend() === 'stable') {
+              <div>
+                <span class="text-xl font-bold text-foreground">≈ stable</span>
+                <p class="text-xs text-muted-foreground">Variation &lt; 3%</p>
+              </div>
+            } @else {
+              <span class="text-xl font-bold text-muted-foreground">—</span>
+            }
+          </div>
+        </div>
+
+        <!-- Meilleure période -->
+        <div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-widest text-muted-foreground">Meilleure période</p>
+          @if (kpiBestPeriod()) {
+            <p class="mt-1.5 text-xl font-bold tabular-nums text-green-600">
+              {{ kpiBestPeriod()!.periodLabel }}
+            </p>
+            <p class="mt-0.5 text-xs text-muted-foreground">
+              {{ kpiBestPeriod()!.report.totalCo2e / 1000 | number: '1.1-1' }} t CO₂e
+            </p>
+          } @else {
+            <span class="text-xl font-bold text-muted-foreground">—</span>
+          }
+        </div>
+      </div>
+
+      <!-- Graphique SVG -->
+      <div class="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-foreground">
+            Évolution de l'empreinte — {{ metricLabel() }}
+          </h2>
+          <div class="flex items-center gap-4 text-xs text-muted-foreground">
+            <span class="flex items-center gap-1.5">
+              <span class="inline-block h-0.5 w-6 bg-primary rounded"></span>
+              Exploitation
+            </span>
+            @if (amortizedLineY() !== null) {
+              <span class="flex items-center gap-1.5">
+                <span class="inline-block h-0.5 w-6 rounded" style="background: repeating-linear-gradient(90deg, oklch(0.7 0.17 145) 0, oklch(0.7 0.17 145) 4px, transparent 4px, transparent 8px)"></span>
+                Constr. amorti/an
+              </span>
+            }
+          </div>
+        </div>
+
+        <!-- Tooltip survolé -->
+        @if (hoveredPoint()) {
+          <div class="mb-3 rounded-lg border border-border bg-muted/60 px-4 py-2.5 text-sm">
+            <span class="font-semibold text-foreground">{{ hoveredPoint()!.periodLabel }}</span>
+            <span class="mx-2 text-muted-foreground">·</span>
+            <span class="tabular-nums font-medium text-foreground">
+              {{ hoveredPoint()!.value | number: '1.2-2' }} {{ metricLabel() }}
+            </span>
+            @if (hoveredPoint()!.report.startDate && hoveredPoint()!.report.endDate) {
+              <span class="ml-2 text-xs text-muted-foreground">
+                ({{ hoveredPoint()!.report.startDate | date: 'dd/MM/yyyy' }}
+                → {{ hoveredPoint()!.report.endDate | date: 'dd/MM/yyyy' }})
+              </span>
+            }
+          </div>
+        }
+
+        <div class="w-full overflow-x-auto">
+          <svg
+            [attr.viewBox]="'0 0 ' + svgW + ' ' + svgH"
+            [attr.width]="svgW"
+            [attr.height]="svgH"
+            class="max-w-full"
+            aria-label="Graphique d'évolution CO₂"
+            role="img"
+          >
+            <defs>
+              <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.15"/>
+                <stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/>
+              </linearGradient>
+              <clipPath id="chartClip">
+                <rect [attr.x]="marginLeft" [attr.y]="marginTop" [attr.width]="chartW" [attr.height]="chartH"/>
+              </clipPath>
+            </defs>
+
+            <!-- Grille horizontale -->
+            @for (tick of yTicks(); track tick.y) {
+              <line
+                [attr.x1]="marginLeft"
+                [attr.y1]="tick.y"
+                [attr.x2]="marginLeft + chartW"
+                [attr.y2]="tick.y"
+                stroke="var(--border)"
+                stroke-width="1"
+                stroke-dasharray="4 4"
+              />
+              <!-- Label axe Y -->
+              <text
+                [attr.x]="marginLeft - 8"
+                [attr.y]="tick.y + 4"
+                text-anchor="end"
+                font-size="11"
+                fill="var(--muted-foreground)"
+              >{{ tick.label }}</text>
+            }
+
+            <!-- Axe X baseline -->
+            <line
+              [attr.x1]="marginLeft"
+              [attr.y1]="marginTop + chartH"
+              [attr.x2]="marginLeft + chartW"
+              [attr.y2]="marginTop + chartH"
+              stroke="var(--border)"
+              stroke-width="1.5"
+            />
+
+            <!-- Axe Y border -->
+            <line
+              [attr.x1]="marginLeft"
+              [attr.y1]="marginTop"
+              [attr.x2]="marginLeft"
+              [attr.y2]="marginTop + chartH"
+              stroke="var(--border)"
+              stroke-width="1.5"
+            />
+
+            <!-- Ligne d'amortissement construction (pointillée) -->
+            @if (amortizedLineY() !== null) {
+              <line
+                [attr.x1]="marginLeft"
+                [attr.y1]="amortizedLineY()!"
+                [attr.x2]="marginLeft + chartW"
+                [attr.y2]="amortizedLineY()!"
+                stroke="oklch(0.7 0.17 145)"
+                stroke-width="1.5"
+                stroke-dasharray="6 4"
+                clip-path="url(#chartClip)"
+              />
+              <text
+                [attr.x]="marginLeft + chartW - 4"
+                [attr.y]="amortizedLineY()! - 5"
+                text-anchor="end"
+                font-size="10"
+                fill="oklch(0.7 0.17 145)"
+              >Constr./an</text>
+            }
+
+            <!-- Aire sous la courbe -->
+            @if (chartPoints().length > 1) {
+              <path
+                [attr.d]="areaPath()"
+                fill="url(#areaGradient)"
+                clip-path="url(#chartClip)"
+              />
+            }
+
+            <!-- Ligne de la courbe -->
+            @if (chartPoints().length > 1) {
+              <polyline
+                [attr.points]="polylinePoints()"
+                fill="none"
+                stroke="var(--primary)"
+                stroke-width="2.5"
+                stroke-linejoin="round"
+                stroke-linecap="round"
+                clip-path="url(#chartClip)"
+              />
+            }
+
+            <!-- Points interactifs + labels X -->
+            @for (pt of chartPoints(); track pt.report.id) {
+              <!-- Label axe X -->
+              <text
+                [attr.x]="pt.svgX"
+                [attr.y]="marginTop + chartH + 18"
+                text-anchor="middle"
+                font-size="11"
+                fill="var(--muted-foreground)"
+              >{{ pt.periodLabel }}</text>
+
+              <!-- Ligne verticale au survol -->
+              @if (hoveredPoint() !== null && hoveredPoint()!.report.id === pt.report.id) {
+                <line
+                  [attr.x1]="pt.svgX"
+                  [attr.y1]="marginTop"
+                  [attr.x2]="pt.svgX"
+                  [attr.y2]="marginTop + chartH"
+                  stroke="var(--primary)"
+                  stroke-width="1"
+                  stroke-dasharray="4 3"
+                  opacity="0.5"
+                />
+              }
+
+              <!-- Cercle (anneau au survol) -->
+              <circle
+                [attr.cx]="pt.svgX"
+                [attr.cy]="pt.svgY"
+                r="5"
+                fill="var(--primary)"
+                stroke="var(--card)"
+                stroke-width="2"
+              />
+              @if (hoveredPoint() !== null && hoveredPoint()!.report.id === pt.report.id) {
+                <circle
+                  [attr.cx]="pt.svgX"
+                  [attr.cy]="pt.svgY"
+                  r="9"
+                  fill="none"
+                  stroke="var(--primary)"
+                  stroke-width="1.5"
+                  opacity="0.4"
+                />
+              }
+
+              <!-- Zone de survol invisible (hitbox large) -->
+              <rect
+                [attr.x]="pt.svgX - 20"
+                [attr.y]="marginTop"
+                width="40"
+                [attr.height]="chartH"
+                fill="transparent"
+                style="cursor: crosshair"
+                (mouseenter)="hoverPoint(pt)"
+                (mouseleave)="hoverPoint(null)"
+              />
+
+              <!-- Valeur au-dessus du point (si survol ou point unique) -->
+              @if ((hoveredPoint() !== null && hoveredPoint()!.report.id === pt.report.id) || chartPoints().length === 1) {
+                <text
+                  [attr.x]="pt.svgX"
+                  [attr.y]="pt.svgY - 12"
+                  text-anchor="middle"
+                  font-size="11"
+                  font-weight="600"
+                  fill="var(--primary)"
+                >{{ pt.value | number: '1.1-1' }}</text>
+              }
+            }
+          </svg>
+        </div>
+      </div>
+
+      <!-- Info construction -->
+      @if (constructionReport()) {
+        <div class="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h3 class="mb-3 text-sm font-semibold text-foreground">Empreinte construction (référence)</h3>
+          <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <p class="text-xs text-muted-foreground">CO₂ construction total</p>
+              <p class="mt-1 text-lg font-bold tabular-nums text-foreground">
+                {{ constructionReport()!.totalCo2e / 1000 | number: '1.1-1' }} t
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-muted-foreground">Amorti sur {{ lifetimeYears() }} ans</p>
+              <p class="mt-1 text-lg font-bold tabular-nums text-foreground">
+                {{ amortizedConstructionCo2PerYear()! / 1000 | number: '1.2-2' }} t/an
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-muted-foreground">Exploitation cumulée vs construction</p>
+              <p class="mt-1 text-lg font-bold tabular-nums"
+                [class]="kpiTotal() > constructionReport()!.totalCo2e ? 'text-red-600' : 'text-green-600'">
+                {{ kpiTotal() / constructionReport()!.totalCo2e * 100 | number: '1.0-0' }}%
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-muted-foreground">Ratio total (constr. + exploit.)</p>
+              <p class="mt-1 text-lg font-bold tabular-nums text-foreground">
+                {{ (constructionReport()!.totalCo2e + kpiTotal()) / 1000 | number: '1.1-1' }} t
+              </p>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Table détaillée -->
+      <div class="rounded-xl border border-border bg-card shadow-sm">
+        <div class="border-b border-border px-5 py-4">
+          <h3 class="text-sm font-semibold text-foreground">
+            Détail par période ({{ exploitationReports().length }} rapport{{ exploitationReports().length > 1 ? 's' : '' }})
+          </h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <th class="px-5 pb-3 pt-4">#</th>
+                <th class="px-5 pb-3 pt-4">Période</th>
+                <th class="px-5 pb-3 pt-4">CO₂ total</th>
+                <th class="px-5 pb-3 pt-4">CO₂ / m²</th>
+                <th class="px-5 pb-3 pt-4">Évolution</th>
+                <th class="px-5 pb-3 pt-4">Créé le</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border">
+              @for (report of exploitationReports(); track report.id; let i = $index) {
+                @let prev = i > 0 ? exploitationReports()[i - 1] : null;
+                @let delta = prev ? ((report.totalCo2e - prev.totalCo2e) / prev.totalCo2e) * 100 : null;
+                <tr
+                  class="transition-colors hover:bg-muted/40"
+                  [class]="hoveredPoint() !== null && hoveredPoint()!.report.id === report.id ? 'bg-primary/5' : ''"
+                  (mouseenter)="hoverPoint(chartPoints()[i])"
+                  (mouseleave)="hoverPoint(null)"
+                >
+                  <td class="px-5 py-3 tabular-nums text-muted-foreground">{{ i + 1 }}</td>
+                  <td class="px-5 py-3 font-medium text-foreground">
+                    @if (report.startDate && report.endDate) {
+                      {{ report.startDate | date: 'dd/MM/yyyy' }} → {{ report.endDate | date: 'dd/MM/yyyy' }}
+                    } @else {
+                      {{ report.createdAt | date: 'dd/MM/yyyy' }}
+                    }
+                  </td>
+                  <td class="px-5 py-3 font-semibold tabular-nums text-foreground">
+                    {{ report.totalCo2e / 1000 | number: '1.2-2' }} t
+                  </td>
+                  <td class="px-5 py-3 tabular-nums text-muted-foreground">
+                    @if (report.co2PerM2 != null) {
+                      {{ report.co2PerM2 | number: '1.1-1' }} kg/m²
+                    } @else { — }
+                  </td>
+                  <td class="px-5 py-3">
+                    @if (delta !== null) {
+                      <span
+                        class="inline-flex items-center gap-1 text-xs font-medium tabular-nums"
+                        [class]="delta > 0 ? 'text-red-600' : delta < 0 ? 'text-green-600' : 'text-muted-foreground'"
+                      >
+                        @if (delta > 0) {
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                        } @else if (delta < 0) {
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+                        }
+                        {{ delta | number: '1.1-1' }}%
+                      </span>
+                    } @else {
+                      <span class="text-xs text-muted-foreground">Référence</span>
+                    }
+                  </td>
+                  <td class="px-5 py-3 text-muted-foreground">{{ report.createdAt | date: 'dd/MM/yyyy' }}</td>
+                </tr>
+              }
+            </tbody>
+            <!-- Totaux -->
+            <tfoot>
+              <tr class="border-t border-border bg-muted/20 font-semibold">
+                <td class="px-5 py-3 text-muted-foreground" colspan="2">Total</td>
+                <td class="px-5 py-3 tabular-nums text-foreground">{{ kpiTotal() / 1000 | number: '1.2-2' }} t</td>
+                <td class="px-5 py-3 tabular-nums text-muted-foreground">
+                  @if (selectedSite()?.totalSurfaceM2) {
+                    {{ kpiTotal() / selectedSite()!.totalSurfaceM2! | number: '1.1-1' }} kg/m²
+                  } @else { — }
+                </td>
+                <td class="px-5 py-3" colspan="2"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    }
+  }
+</div>

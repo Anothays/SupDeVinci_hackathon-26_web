@@ -7,8 +7,11 @@ import { UserResponse } from '../models/user.model';
 export interface CreateUserRequest {
   email: string;
   password: string;
-  firstName: string | null;
-  lastName: string | null;
+  role: 'ADMIN' | 'USER';
+}
+
+export interface UpdateUserRequest {
+  email: string;
   role: 'ADMIN' | 'USER';
 }
 
@@ -29,7 +32,7 @@ export class UserService {
     return this.http.post<UserResponse>(`${this.apiUrl}/api/users`, request);
   }
 
-  update(id: string, request: Partial<CreateUserRequest>): Observable<UserResponse> {
+  update(id: string, request: UpdateUserRequest): Observable<UserResponse> {
     return this.http.put<UserResponse>(`${this.apiUrl}/api/users/${id}`, request);
   }
 

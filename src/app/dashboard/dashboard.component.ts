@@ -12,14 +12,9 @@ import { BrnProgressImports } from '@spartan-ng/brain/progress';
 import { BrnSeparatorImports } from '@spartan-ng/brain/separator';
 import { AuthService } from '../auth/services/auth.service';
 import { SiteService } from '../core/services/site.service';
-import { CarbonReportService } from '../core/services/carbon-report.service';
+import { ReportService } from '../core/services/report.service';
 import { SiteResponse } from '../core/models/site.model';
-import {
-  CATEGORY_COLORS,
-  CATEGORY_LABELS,
-  CarbonReportDetailResponse,
-  CarbonReportResponse,
-} from '../core/models/carbon-report.model';
+import { ReportResponse, ReportLineResponse } from '../core/models/report.model';
 import { HlmButtonDirective } from '../shared/ui/hlm-button.directive';
 import { HlmBadgeDirective } from '../shared/ui/hlm-badge.directive';
 
@@ -40,7 +35,7 @@ import { HlmBadgeDirective } from '../shared/ui/hlm-badge.directive';
 export class DashboardComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly siteService = inject(SiteService);
-  private readonly carbonReportService = inject(CarbonReportService);
+  private readonly reportService = inject(ReportService);
 
   readonly user = this.authService.currentUser;
 
@@ -51,53 +46,40 @@ export class DashboardComponent implements OnInit {
   );
 
   readonly loadingReports = signal(false);
-  readonly loadingDetails = signal(false);
+  readonly reports = signal<ReportResponse[]>([]);
 
-  readonly reports = signal<CarbonReportResponse[]>([]);
+  readonly constructionReport = computed(() =>
+    this.reports().find((r) => r.type === 'CONSTRUCTION') ?? null,
+  );
+  readonly exploitationReports = computed(() =>
+    this.reports().filter((r) => r.type === 'EXPLOITATION'),
+  );
   readonly latestReport = computed(() => this.reports()[0] ?? null);
-  readonly reportDetails = signal<CarbonReportDetailResponse[]>([]);
 
   readonly activeTab = signal('overview');
 
   readonly donutCircumference = 2 * Math.PI * 70;
 
-  readonly totalCo2T = computed(() => (this.latestReport()?.totalCo2Kg ?? 0) / 1000);
+  readonly constructionCo2 = computed(() => this.constructionReport()?.totalCo2e ?? 0);
+  readonly exploitationCo2 = computed(() =>
+    this.exploitationReports().reduce((sum, r) => sum + r.totalCo2e, 0),
+  );
+  readonly totalCo2 = computed(() => this.constructionCo2() + this.exploitationCo2());
+  readonly totalCo2T = computed(() => this.totalCo2() / 1000);
 
   readonly donutConstruction = computed(() => {
-    const r = this.latestReport();
-    if (!r || !r.totalCo2Kg || !r.constructionCo2Kg) return { len: 0, pct: 0 };
-    const pct = (r.constructionCo2Kg / r.totalCo2Kg) * 100;
+    const total = this.totalCo2();
+    if (!total || !this.constructionCo2()) return { len: 0, pct: 0 };
+    const pct = (this.constructionCo2() / total) * 100;
     return { len: (pct / 100) * this.donutCircumference, pct };
   });
 
   readonly donutExploitation = computed(() => {
-    const r = this.latestReport();
-    if (!r || !r.totalCo2Kg || !r.exploitationCo2Kg) return { len: 0, pct: 0 };
-    const pct = (r.exploitationCo2Kg / r.totalCo2Kg) * 100;
+    const total = this.totalCo2();
+    if (!total || !this.exploitationCo2()) return { len: 0, pct: 0 };
+    const pct = (this.exploitationCo2() / total) * 100;
     return { len: (pct / 100) * this.donutCircumference, pct };
   });
-
-  readonly sortedDetails = computed(() =>
-    [...this.reportDetails()].sort((a, b) => (b.co2Kg ?? 0) - (a.co2Kg ?? 0)),
-  );
-
-  readonly materialsTotal = computed(() =>
-    this.reportDetails()
-      .filter((d) => d.category.startsWith('MATERIAU'))
-      .reduce((sum, d) => sum + (d.co2Kg ?? 0), 0),
-  );
-
-  readonly energyTotal = computed(() =>
-    this.reportDetails()
-      .filter((d) => d.category.startsWith('ENERGIE'))
-      .reduce((sum, d) => sum + (d.co2Kg ?? 0), 0),
-  );
-
-  readonly parkingTotal = computed(() =>
-    this.reportDetails()
-      .filter((d) => d.category === 'PARKING')
-      .reduce((sum, d) => sum + (d.co2Kg ?? 0), 0),
-  );
 
   ngOnInit(): void {
     this.siteService.getAll().subscribe((sites) => this.sites.set(sites));
@@ -107,36 +89,15 @@ export class DashboardComponent implements OnInit {
     const id = (event.target as HTMLSelectElement).value;
     this.selectedSiteId.set(id || null);
     this.reports.set([]);
-    this.reportDetails.set([]);
     if (!id) return;
 
     this.loadingReports.set(true);
-    this.carbonReportService.getBySiteId(id).subscribe({
+    this.reportService.getBySiteId(id).subscribe({
       next: (reports) => {
         this.reports.set(reports);
         this.loadingReports.set(false);
-        if (reports.length > 0) this.loadDetails(reports[0].id);
       },
       error: () => this.loadingReports.set(false),
-    });
-  }
-
-  selectReport(report: CarbonReportResponse): void {
-    const idx = this.reports().findIndex((r) => r.id === report.id);
-    if (idx === -1) return;
-    const reordered = [report, ...this.reports().filter((r) => r.id !== report.id)];
-    this.reports.set(reordered);
-    this.loadDetails(report.id);
-  }
-
-  private loadDetails(reportId: string): void {
-    this.loadingDetails.set(true);
-    this.carbonReportService.getDetails(reportId).subscribe({
-      next: (details) => {
-        this.reportDetails.set(details);
-        this.loadingDetails.set(false);
-      },
-      error: () => this.loadingDetails.set(false),
     });
   }
 
@@ -149,13 +110,5 @@ export class DashboardComponent implements OnInit {
       `inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 ` +
       (active ? 'bg-background text-foreground shadow' : 'text-muted-foreground hover:text-foreground')
     );
-  }
-
-  getCategoryLabel(category: string): string {
-    return CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] ?? category;
-  }
-
-  getCategoryColor(category: string): string {
-    return CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] ?? '#94a3b8';
   }
 }

@@ -20,50 +20,34 @@ export const dashboardRoutes: Routes = [
           import('./pages/sites/sites.component').then((m) => m.SitesComponent),
       },
       {
+        path: 'reports',
+        loadComponent: () =>
+          import('./pages/reports/reports.component').then((m) => m.ReportsComponent),
+      },
+      {
+        path: 'parking-types',
+        loadComponent: () =>
+          import('./pages/parking-types/parking-types.component').then(
+            (m) => m.ParkingTypesComponent,
+          ),
+      },
+      {
         path: 'users',
         loadComponent: () =>
           import('./pages/users/users.component').then((m) => m.UsersComponent),
       },
       {
-        path: 'material-types',
+        path: 'history',
         loadComponent: () =>
-          import('./pages/material-types/material-types.component').then(
-            (m) => m.MaterialTypesComponent,
-          ),
+          import('./pages/history/history.component').then((m) => m.HistoryComponent),
       },
-      {
-        path: 'energy-factors',
-        loadComponent: () =>
-          import('./pages/energy-factors/energy-factors.component').then(
-            (m) => m.EnergyFactorsComponent,
-          ),
-      },
-      {
-        path: 'site-energy',
-        loadComponent: () =>
-          import('./pages/site-energy/site-energy.component').then((m) => m.SiteEnergyComponent),
-      },
-      {
-        path: 'site-materials',
-        loadComponent: () =>
-          import('./pages/site-materials/site-materials.component').then(
-            (m) => m.SiteMaterialsComponent,
-          ),
-      },
-      {
-        path: 'site-parking',
-        loadComponent: () =>
-          import('./pages/site-parking/site-parking.component').then(
-            (m) => m.SiteParkingComponent,
-          ),
-      },
-      {
-        path: 'carbon-reports',
-        loadComponent: () =>
-          import('./pages/carbon-reports/carbon-reports.component').then(
-            (m) => m.CarbonReportsComponent,
-          ),
-      },
+      // Redirections des anciennes routes
+      { path: 'material-types', redirectTo: 'reports' },
+      { path: 'energy-factors', redirectTo: 'parking-types' },
+      { path: 'site-energy', redirectTo: 'reports' },
+      { path: 'site-materials', redirectTo: 'reports' },
+      { path: 'site-parking', redirectTo: 'sites' },
+      { path: 'carbon-reports', redirectTo: 'reports' },
     ],
   },
 ];

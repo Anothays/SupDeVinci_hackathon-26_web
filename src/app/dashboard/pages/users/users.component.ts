@@ -32,8 +32,6 @@ export class UsersComponent implements OnInit {
   readonly form = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
     password: [''],
-    firstName: [''],
-    lastName: [''],
     role: ['USER' as 'ADMIN' | 'USER'],
   });
 
@@ -44,7 +42,10 @@ export class UsersComponent implements OnInit {
   private load(): void {
     this.loading.set(true);
     this.userService.getAll().subscribe({
-      next: (data) => { this.users.set(data); this.loading.set(false); },
+      next: (data) => {
+        this.users.set(data);
+        this.loading.set(false);
+      },
       error: () => this.loading.set(false),
     });
   }
@@ -64,8 +65,6 @@ export class UsersComponent implements OnInit {
     this.form.get('password')?.updateValueAndValidity();
     this.form.patchValue({
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
       role: user.role,
     });
     this.error.set(null);
@@ -84,28 +83,60 @@ export class UsersComponent implements OnInit {
     const value = this.form.getRawValue();
     const id = this.editingId();
 
-    const payload = id
-      ? { email: value.email ?? '', firstName: value.firstName || null, lastName: value.lastName || null, role: (value.role ?? 'USER') as 'ADMIN' | 'USER' }
-      : { email: value.email ?? '', password: value.password ?? '', firstName: value.firstName || null, lastName: value.lastName || null, role: (value.role ?? 'USER') as 'ADMIN' | 'USER' };
-
-    const req$ = id
-      ? this.userService.update(id, payload)
-      : this.userService.create(payload as Parameters<typeof this.userService.create>[0]);
-
-    req$.subscribe({
-      next: () => { this.saving.set(false); this.closeModal(); this.load(); },
-      error: () => { this.saving.set(false); this.error.set('Une erreur est survenue.'); },
-    });
+    if (id) {
+      this.userService
+        .update(id, {
+          email: value.email ?? '',
+          role: (value.role ?? 'USER') as 'ADMIN' | 'USER',
+        })
+        .subscribe({
+          next: () => {
+            this.saving.set(false);
+            this.closeModal();
+            this.load();
+          },
+          error: () => {
+            this.saving.set(false);
+            this.error.set('Une erreur est survenue.');
+          },
+        });
+    } else {
+      this.userService
+        .create({
+          email: value.email ?? '',
+          password: value.password ?? '',
+          role: (value.role ?? 'USER') as 'ADMIN' | 'USER',
+        })
+        .subscribe({
+          next: () => {
+            this.saving.set(false);
+            this.closeModal();
+            this.load();
+          },
+          error: () => {
+            this.saving.set(false);
+            this.error.set('Une erreur est survenue.');
+          },
+        });
+    }
   }
 
-  askDelete(id: string): void { this.deletingId.set(id); }
-  cancelDelete(): void { this.deletingId.set(null); }
+  askDelete(id: string): void {
+    this.deletingId.set(id);
+  }
+
+  cancelDelete(): void {
+    this.deletingId.set(null);
+  }
 
   confirmDelete(): void {
     const id = this.deletingId();
     if (!id) return;
     this.userService.delete(id).subscribe({
-      next: () => { this.deletingId.set(null); this.load(); },
+      next: () => {
+        this.deletingId.set(null);
+        this.load();
+      },
       error: () => this.deletingId.set(null),
     });
   }

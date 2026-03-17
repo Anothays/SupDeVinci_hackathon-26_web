@@ -1,0 +1,313 @@
+<div class="p-6">
+  <!-- Header -->
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-lg font-semibold text-foreground">Rapports</h1>
+      <p class="text-sm text-muted-foreground">Bilans carbone construction &amp; exploitation</p>
+    </div>
+    <button
+      class="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90"
+      (click)="openCreate()"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Rapport d'exploitation
+    </button>
+  </div>
+
+  <!-- Filtre par site -->
+  <div class="mb-4 flex items-center gap-3">
+    <label class="text-sm font-medium text-muted-foreground">Filtrer par site :</label>
+    <select
+      class="h-9 min-w-[220px] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      (change)="onSiteFilter($event)"
+    >
+      <option value="">Tous les sites</option>
+      @for (site of sites(); track site.id) {
+        <option [value]="site.id">{{ site.name }}</option>
+      }
+    </select>
+  </div>
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="flex items-center justify-center py-16">
+      <svg class="animate-spin text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+    </div>
+  } @else if (filteredReports().length === 0) {
+    <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 py-16 text-center">
+      <p class="text-sm font-medium text-foreground">Aucun rapport disponible</p>
+      <p class="mt-1 text-xs text-muted-foreground">Les rapports de construction sont générés automatiquement à la création d'un site.</p>
+    </div>
+  } @else {
+    <div class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="border-b border-border bg-muted/50">
+            <tr class="text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <th class="px-4 py-3">Type</th>
+              <th class="px-4 py-3">Site</th>
+              <th class="px-4 py-3">CO₂ total (tCO2e)</th>
+              <th class="px-4 py-3">CO₂/m²</th>
+              <th class="px-4 py-3">Période</th>
+              <th class="px-4 py-3">Créé le</th>
+              <th class="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            @for (report of filteredReports(); track report.id) {
+              <tr class="transition-colors hover:bg-muted/30">
+                <td class="px-4 py-3">
+                  <span
+                    class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                    [class]="report.type === 'CONSTRUCTION'
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                      : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'"
+                  >{{ typeLabel(report.type) }}</span>
+                </td>
+                <td class="px-4 py-3 font-medium text-foreground">{{ report.siteName ?? '—' }}</td>
+                <td class="px-4 py-3 tabular-nums text-muted-foreground">
+                  {{ report.totalCo2e / 1000 | number: '1.2-2' }}
+                </td>
+                <td class="px-4 py-3 tabular-nums text-muted-foreground">
+                  @if (report.co2PerM2 != null) { {{ report.co2PerM2 | number: '1.2-2' }} kg } @else { — }
+                </td>
+                <td class="px-4 py-3 text-muted-foreground">
+                  @if (report.startDate && report.endDate) {
+                    {{ report.startDate | date: 'dd/MM/yyyy' }} → {{ report.endDate | date: 'dd/MM/yyyy' }}
+                  } @else {
+                    —
+                  }
+                </td>
+                <td class="px-4 py-3 text-muted-foreground">{{ report.createdAt | date: 'dd/MM/yyyy' }}</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-end gap-2">
+                    <button
+                      class="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm transition-colors hover:bg-accent"
+                      (click)="openDetail(report)"
+                    >Détail</button>
+                    <button
+                      class="inline-flex h-8 items-center rounded-md bg-destructive px-3 text-xs font-medium text-white shadow-sm transition-colors hover:bg-destructive/90"
+                      (click)="askDelete(report.id)"
+                    >Supprimer</button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+
+  <!-- Modal: Nouveau rapport d'exploitation -->
+  @if (showModal()) {
+    <div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" (click)="closeModal()">
+      <div class="my-8 w-full max-w-2xl rounded-xl bg-background p-6 shadow-xl" (click)="$event.stopPropagation()">
+        <h2 class="mb-6 text-base font-semibold text-foreground">Nouveau rapport d'exploitation</h2>
+
+        <form [formGroup]="form" (ngSubmit)="save()" class="flex flex-col gap-6">
+          <!-- Sélection site + dates -->
+          <div class="flex flex-col gap-4">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-medium text-muted-foreground">Site *</label>
+              <select
+                formControlName="siteId"
+                class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">— Sélectionner un site —</option>
+                @for (site of sites(); track site.id) {
+                  <option [value]="site.id">{{ site.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-muted-foreground">Date de début *</label>
+                <input hlmInput type="date" formControlName="startDate"/>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-muted-foreground">Date de fin *</label>
+                <input hlmInput type="date" formControlName="endDate"/>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lignes de consommation (ADEME) -->
+          <div>
+            <h3 class="mb-3 text-sm font-medium text-foreground">Consommations énergétiques</h3>
+
+            <!-- ADEME Search -->
+            <div class="relative mb-3">
+              <label class="mb-1.5 block text-xs font-medium text-muted-foreground">Rechercher une source d'énergie (base ADEME)</label>
+              <input
+                hlmInput
+                type="text"
+                [value]="ademeQuery()"
+                (input)="onAdemeSearch($event)"
+                (blur)="hideAdemeDropdown()"
+                placeholder="Ex: électricité, gaz naturel, fioul..."
+                class="w-full"
+              />
+              @if (ademeLoading()) {
+                <div class="absolute right-3 top-8">
+                  <svg class="animate-spin text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                </div>
+              }
+              @if (showAdemeDropdown() && ademeResults().length > 0) {
+                <div class="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+                  @for (result of ademeResults(); track result.id) {
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+                      (click)="selectAdemeResult(result)"
+                    >
+                      <span class="font-medium">{{ result.nomBase }}</span>
+                      <span class="ml-2 shrink-0 text-xs text-muted-foreground">{{ result.totalPosteNonDecompose }} {{ result.uniteFr }}</span>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+
+            @if (addedLines().length === 0) {
+              <p class="text-xs text-muted-foreground">Aucune consommation ajoutée. Recherchez et sélectionnez des sources ci-dessus.</p>
+            } @else {
+              <div class="flex flex-col gap-2">
+                @for (line of addedLines(); track $index) {
+                  <div class="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <div class="flex-1">
+                      <p class="text-sm font-medium text-foreground">{{ line.label }}</p>
+                      <p class="text-xs text-muted-foreground">{{ line.feValueAtTime }} kgCO2e/{{ line.unit }}</p>
+                    </div>
+                    <div class="w-36">
+                      <label class="mb-1 block text-xs font-medium text-muted-foreground">Quantité ({{ line.unit }})</label>
+                      <input
+                        hlmInput
+                        type="number"
+                        [value]="line.quantity"
+                        (input)="updateLineQuantity($index, $event)"
+                        placeholder="0"
+                        class="h-8"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      class="mt-4 inline-flex h-8 w-8 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10"
+                      (click)="removeLine($index)"
+                      aria-label="Supprimer cette ligne"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          @if (error()) {
+            <p class="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{{ error() }}</p>
+          }
+
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button"
+              class="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-accent"
+              (click)="closeModal()">Annuler</button>
+            <button type="submit"
+              class="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50"
+              [disabled]="saving() || form.invalid">
+              {{ saving() ? 'Création...' : 'Créer le rapport' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Modal: Détail du rapport -->
+  @if (selectedReport()) {
+    <div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" (click)="closeDetail()">
+      <div class="my-8 w-full max-w-2xl rounded-xl bg-background p-6 shadow-xl" (click)="$event.stopPropagation()">
+        <div class="mb-4 flex items-start justify-between">
+          <div>
+            <div class="mb-1 flex items-center gap-2">
+              <span
+                class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                [class]="selectedReport()!.type === 'CONSTRUCTION'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-green-100 text-green-700'"
+              >{{ typeLabel(selectedReport()!.type) }}</span>
+            </div>
+            <h2 class="text-base font-semibold text-foreground">{{ selectedReport()!.siteName ?? 'Site inconnu' }}</h2>
+            <p class="text-sm text-muted-foreground">
+              CO₂ total : <strong>{{ selectedReport()!.totalCo2e / 1000 | number: '1.2-2' }} tCO2e</strong>
+              @if (selectedReport()!.co2PerM2 != null) {
+                — {{ selectedReport()!.co2PerM2 | number: '1.2-2' }} kgCO2e/m²
+              }
+            </p>
+          </div>
+          <button
+            class="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent"
+            (click)="closeDetail()"
+            aria-label="Fermer"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        @if (selectedReport()!.lines.length === 0) {
+          <p class="text-sm text-muted-foreground">Aucune ligne de détail disponible.</p>
+        } @else {
+          <div class="overflow-hidden rounded-lg border border-border">
+            <table class="w-full text-sm">
+              <thead class="border-b border-border bg-muted/50">
+                <tr class="text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  <th class="px-4 py-2.5">Libellé</th>
+                  <th class="px-4 py-2.5">Quantité</th>
+                  <th class="px-4 py-2.5">Unité</th>
+                  <th class="px-4 py-2.5">FE (kgCO2e)</th>
+                  <th class="px-4 py-2.5 text-right">CO2e (kg)</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                @for (line of selectedReport()!.lines; track line.id) {
+                  <tr class="hover:bg-muted/30">
+                    <td class="px-4 py-2.5 font-medium text-foreground">{{ line.label }}</td>
+                    <td class="px-4 py-2.5 tabular-nums text-muted-foreground">{{ line.quantity | number: '1.0-2' }}</td>
+                    <td class="px-4 py-2.5 text-muted-foreground">{{ line.unit }}</td>
+                    <td class="px-4 py-2.5 tabular-nums text-muted-foreground">{{ line.feValueAtTime }}</td>
+                    <td class="px-4 py-2.5 text-right tabular-nums font-medium text-foreground">{{ line.co2e | number: '1.1-1' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <div class="mt-4 flex justify-end">
+          <button
+            class="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-accent"
+            (click)="closeDetail()"
+          >Fermer</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Delete confirmation -->
+  @if (deletingId()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div class="w-full max-w-sm rounded-xl bg-background p-6 shadow-xl">
+        <h2 class="text-base font-semibold text-foreground">Supprimer ce rapport ?</h2>
+        <p class="mt-2 text-sm text-muted-foreground">Cette action est irréversible.</p>
+        <div class="mt-4 flex justify-end gap-2">
+          <button
+            class="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-accent"
+            (click)="cancelDelete()">Annuler</button>
+          <button
+            class="inline-flex h-9 items-center rounded-md bg-destructive px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-destructive/90"
+            (click)="confirmDelete()">Supprimer</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

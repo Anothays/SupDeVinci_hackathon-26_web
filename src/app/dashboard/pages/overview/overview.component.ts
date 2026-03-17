@@ -7,118 +7,165 @@ import {
   signal,
 } from '@angular/core';
 import { DecimalPipe, DatePipe } from '@angular/common';
-import { BrnTabsImports } from '@spartan-ng/brain/tabs';
-import { BrnProgressImports } from '@spartan-ng/brain/progress';
-import { BrnSeparatorImports } from '@spartan-ng/brain/separator';
 import { SiteService } from '../../../core/services/site.service';
-import { CarbonReportService } from '../../../core/services/carbon-report.service';
+import { ReportService } from '../../../core/services/report.service';
 import { SiteResponse } from '../../../core/models/site.model';
-import {
-  CATEGORY_COLORS,
-  CATEGORY_LABELS,
-  CarbonReportDetailResponse,
-  CarbonReportResponse,
-} from '../../../core/models/carbon-report.model';
+import { ReportResponse } from '../../../core/models/report.model';
 import { HlmBadgeDirective } from '../../../shared/ui/hlm-badge.directive';
+
+interface SiteStats {
+  site: SiteResponse;
+  reports: ReportResponse[];
+  constructionReport: ReportResponse | null;
+  exploitationReports: ReportResponse[];
+  constructionCo2: number;
+  exploitationCo2: number;
+  totalCo2: number;
+}
 
 @Component({
   selector: 'app-overview',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, DatePipe, BrnTabsImports, BrnProgressImports, BrnSeparatorImports, HlmBadgeDirective],
+  imports: [DecimalPipe, DatePipe, HlmBadgeDirective],
   templateUrl: './overview.component.html',
 })
 export class OverviewComponent implements OnInit {
   private readonly siteService = inject(SiteService);
-  private readonly carbonReportService = inject(CarbonReportService);
+  private readonly reportService = inject(ReportService);
 
   readonly sites = signal<SiteResponse[]>([]);
-  readonly selectedSiteId = signal<string | null>(null);
-  readonly selectedSite = computed(() => this.sites().find((s) => s.id === this.selectedSiteId()) ?? null);
 
-  readonly loadingReports = signal(false);
-  readonly loadingDetails = signal(false);
-  readonly reports = signal<CarbonReportResponse[]>([]);
-  readonly latestReport = computed(() => this.reports()[0] ?? null);
-  readonly reportDetails = signal<CarbonReportDetailResponse[]>([]);
-  readonly activeTab = signal('overview');
+  // Site A
+  readonly selectedSiteIdA = signal<string | null>(null);
+  readonly loadingA = signal(false);
+  readonly reportsA = signal<ReportResponse[]>([]);
+
+  // Site B (comparaison)
+  readonly compareMode = signal(false);
+  readonly selectedSiteIdB = signal<string | null>(null);
+  readonly loadingB = signal(false);
+  readonly reportsB = signal<ReportResponse[]>([]);
+
+  readonly activeTab = signal<'repartition' | 'rapports' | 'comparaison'>('repartition');
+
+  // ─── Stats site A ─────────────────────────────────────────────────────────
+  readonly statsA = computed<SiteStats | null>(() => {
+    const id = this.selectedSiteIdA();
+    const site = this.sites().find((s) => s.id === id) ?? null;
+    if (!site) return null;
+    return this.buildStats(site, this.reportsA());
+  });
+
+  // ─── Stats site B ─────────────────────────────────────────────────────────
+  readonly statsB = computed<SiteStats | null>(() => {
+    if (!this.compareMode()) return null;
+    const id = this.selectedSiteIdB();
+    const site = this.sites().find((s) => s.id === id) ?? null;
+    if (!site) return null;
+    return this.buildStats(site, this.reportsB());
+  });
 
   readonly donutCircumference = 2 * Math.PI * 70;
-  readonly totalCo2T = computed(() => (this.latestReport()?.totalCo2Kg ?? 0) / 1000);
 
-  readonly donutConstruction = computed(() => {
-    const r = this.latestReport();
-    if (!r?.totalCo2Kg || !r.constructionCo2Kg) return { len: 0, pct: 0 };
-    const pct = (r.constructionCo2Kg / r.totalCo2Kg) * 100;
-    return { len: (pct / 100) * this.donutCircumference, pct };
-  });
+  readonly donutA = computed(() => this.buildDonut(this.statsA()));
+  readonly donutB = computed(() => this.buildDonut(this.statsB()));
 
-  readonly donutExploitation = computed(() => {
-    const r = this.latestReport();
-    if (!r?.totalCo2Kg || !r.exploitationCo2Kg) return { len: 0, pct: 0 };
-    const pct = (r.exploitationCo2Kg / r.totalCo2Kg) * 100;
-    return { len: (pct / 100) * this.donutCircumference, pct };
-  });
-
-  readonly sortedDetails = computed(() =>
-    [...this.reportDetails()].sort((a, b) => (b.co2Kg ?? 0) - (a.co2Kg ?? 0)),
-  );
-  readonly materialsTotal = computed(() =>
-    this.reportDetails().filter((d) => d.category.startsWith('MATERIAU')).reduce((s, d) => s + (d.co2Kg ?? 0), 0),
-  );
-  readonly energyTotal = computed(() =>
-    this.reportDetails().filter((d) => d.category.startsWith('ENERGIE')).reduce((s, d) => s + (d.co2Kg ?? 0), 0),
-  );
-  readonly parkingTotal = computed(() =>
-    this.reportDetails().filter((d) => d.category === 'PARKING').reduce((s, d) => s + (d.co2Kg ?? 0), 0),
+  // Sites disponibles pour le sélecteur B (exclut le site A)
+  readonly sitesForB = computed(() =>
+    this.sites().filter((s) => s.id !== this.selectedSiteIdA()),
   );
 
   ngOnInit(): void {
     this.siteService.getAll().subscribe((sites) => this.sites.set(sites));
   }
 
-  onSiteChange(event: Event): void {
+  onSiteChangeA(event: Event): void {
     const id = (event.target as HTMLSelectElement).value;
-    this.selectedSiteId.set(id || null);
-    this.reports.set([]);
-    this.reportDetails.set([]);
+    this.selectedSiteIdA.set(id || null);
+    this.reportsA.set([]);
     if (!id) return;
-    this.loadingReports.set(true);
-    this.carbonReportService.getBySiteId(id).subscribe({
+    this.loadingA.set(true);
+    this.reportService.getBySiteId(id).subscribe({
       next: (reports) => {
-        this.reports.set(reports);
-        this.loadingReports.set(false);
-        if (reports.length > 0) this.loadDetails(reports[0].id);
+        this.reportsA.set(reports);
+        this.loadingA.set(false);
       },
-      error: () => this.loadingReports.set(false),
+      error: () => this.loadingA.set(false),
     });
   }
 
-  selectReport(report: CarbonReportResponse): void {
-    const reordered = [report, ...this.reports().filter((r) => r.id !== report.id)];
-    this.reports.set(reordered);
-    this.loadDetails(report.id);
-  }
-
-  private loadDetails(reportId: string): void {
-    this.loadingDetails.set(true);
-    this.carbonReportService.getDetails(reportId).subscribe({
-      next: (details) => { this.reportDetails.set(details); this.loadingDetails.set(false); },
-      error: () => this.loadingDetails.set(false),
+  onSiteChangeB(event: Event): void {
+    const id = (event.target as HTMLSelectElement).value;
+    this.selectedSiteIdB.set(id || null);
+    this.reportsB.set([]);
+    if (!id) return;
+    this.loadingB.set(true);
+    this.reportService.getBySiteId(id).subscribe({
+      next: (reports) => {
+        this.reportsB.set(reports);
+        this.loadingB.set(false);
+      },
+      error: () => this.loadingB.set(false),
     });
   }
 
-  tabClass(active: boolean): string {
-    return (
-      'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ' +
-      (active ? 'bg-background text-foreground shadow' : 'text-muted-foreground hover:text-foreground')
-    );
+  toggleCompare(): void {
+    const next = !this.compareMode();
+    this.compareMode.set(next);
+    if (!next) {
+      this.selectedSiteIdB.set(null);
+      this.reportsB.set([]);
+    }
+    if (next && this.activeTab() !== 'comparaison') {
+      this.activeTab.set('comparaison');
+    }
   }
 
-  getCategoryLabel(category: string): string {
-    return CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] ?? category;
+  setTab(tab: 'repartition' | 'rapports' | 'comparaison'): void {
+    this.activeTab.set(tab);
   }
 
-  getCategoryColor(category: string): string {
-    return CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] ?? '#94a3b8';
+  private buildStats(site: SiteResponse, reports: ReportResponse[]): SiteStats {
+    const constructionReport = reports.find((r) => r.type === 'CONSTRUCTION') ?? null;
+    const exploitationReports = reports.filter((r) => r.type === 'EXPLOITATION');
+    const constructionCo2 = constructionReport?.totalCo2e ?? 0;
+    const exploitationCo2 = exploitationReports.reduce((s, r) => s + r.totalCo2e, 0);
+    return {
+      site,
+      reports,
+      constructionReport,
+      exploitationReports,
+      constructionCo2,
+      exploitationCo2,
+      totalCo2: constructionCo2 + exploitationCo2,
+    };
+  }
+
+  private buildDonut(stats: SiteStats | null): {
+    constructionLen: number;
+    exploitationLen: number;
+    constructionPct: number;
+    exploitationPct: number;
+  } {
+    const zero = { constructionLen: 0, exploitationLen: 0, constructionPct: 0, exploitationPct: 0 };
+    if (!stats || stats.totalCo2 === 0) return zero;
+    const cPct = (stats.constructionCo2 / stats.totalCo2) * 100;
+    const ePct = (stats.exploitationCo2 / stats.totalCo2) * 100;
+    return {
+      constructionLen: (cPct / 100) * this.donutCircumference,
+      exploitationLen: (ePct / 100) * this.donutCircumference,
+      constructionPct: cPct,
+      exploitationPct: ePct,
+    };
+  }
+
+  co2PerM2(stats: SiteStats | null): number | null {
+    if (!stats || stats.totalCo2 === 0 || !stats.site.totalSurfaceM2) return null;
+    return stats.totalCo2 / stats.site.totalSurfaceM2;
+  }
+
+  co2PerEmployee(stats: SiteStats | null): number | null {
+    if (!stats || stats.totalCo2 === 0 || !stats.site.totalEmployees) return null;
+    return stats.totalCo2 / stats.site.totalEmployees;
   }
 }
